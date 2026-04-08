@@ -2,8 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:label="GboardHook"
-        android:description="Modify Gboard clipboard limits">
+        android:label="GboardHook">
         <activity
             android:name="com.chenyue404.gboardhook.MainActivity"
             android:exported="true">
