@@ -26,17 +26,13 @@ class PluginEntry : XposedModule() {
     }
 
     private fun getModulePrefs(): SharedPreferences? {
-        return try {
-            @Suppress("DEPRECATION")
-            createPackageContext(
-                BuildConfig.APPLICATION_ID,
-                Context.CONTEXT_IGNORE_SECURITY
-            ).getSharedPreferences(SP_FILE_NAME, Context.MODE_PRIVATE)
-        } catch (t: Throwable) {
-            Log.e(TAG, "Failed to read module preferences", t)
-            null
-        }
+    return try {
+        getRemotePreferences(SP_FILE_NAME)
+    } catch (t: Throwable) {
+        Log.e(TAG, "Failed to read module preferences", t)
+        null
     }
+}
 
     private fun getClipboardSize(): Int {
         val raw = getModulePrefs()?.getString(SP_KEY, null)
