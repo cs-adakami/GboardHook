@@ -1,5 +1,7 @@
 package com.chenyue404.gboardhook
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
 import io.github.libxposed.api.XposedInterface
@@ -21,6 +23,39 @@ class PluginEntry : XposedModule() {
         const val DEFAULT_NUM = 10
         const val DEFAULT_TIME = DAY * 3
         private const val TAG = "GboardHook"
+    }
+
+    private fun getModulePrefs(): SharedPreferences? {
+        return try {
+            @Suppress("DEPRECATION")
+            createPackageContext(
+                BuildConfig.APPLICATION_ID,
+                Context.CONTEXT_IGNORE_SECURITY
+            ).getSharedPreferences(SP_FILE_NAME, Context.MODE_PRIVATE)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to read module preferences", t)
+            null
+        }
+    }
+
+    private fun getClipboardSize(): Int {
+        val raw = getModulePrefs()?.getString(SP_KEY, null)
+        return raw?.split(",")?.getOrNull(0)?.toIntOrNull() ?: DEFAULT_NUM
+    }
+
+    private fun getClipboardTime(): Long {
+        val raw = getModulePrefs()?.getString(SP_KEY, null)
+        return raw?.split(",")?.getOrNull(1)?.toLongOrNull() ?: DEFAULT_TIME
+    }
+
+    private fun isLogEnabled(): Boolean {
+        return getModulePrefs()?.getBoolean(SP_KEY_LOG, false) ?: false
+    }
+
+    private fun log(msg: String) {
+        if (isLogEnabled()) {
+            Log.i(TAG, msg)
+        }
     }
 
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
@@ -58,7 +93,10 @@ class PluginEntry : XposedModule() {
                     val selectionArgs = args.getOrNull(3) as? Array<String>
                     val sortOrder = args.getOrNull(4) as? String
 
-                    var newArgs = args
+                    val newArgs = args.copyOf()
+
+                    val clipboardTime = getClipboardTime()
+                    val clipboardSize = getClipboardSize()
 
                     if (selection != null && selectionArgs != null) {
                         val indexOf = selection.indexOf("timestamp >= ?")
@@ -71,12 +109,11 @@ class PluginEntry : XposedModule() {
 
                             if (questionIndexBeforeTarget in selectionArgs.indices) {
                                 val copiedSelectionArgs = selectionArgs.copyOf()
-                                val afterTimeStamp = System.currentTimeMillis() - DEFAULT_TIME
+                                val afterTimeStamp = System.currentTimeMillis() - clipboardTime
                                 copiedSelectionArgs[questionIndexBeforeTarget] = afterTimeStamp.toString()
                                 newArgs[3] = copiedSelectionArgs
 
-                                Log.i(
-                                    TAG,
+                                log(
                                     "Modified clipboard retention: ${
                                         SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
                                             .format(Date(afterTimeStamp))
@@ -87,8 +124,8 @@ class PluginEntry : XposedModule() {
                     }
 
                     if (sortOrder == "timestamp DESC limit 5") {
-                        newArgs[4] = "timestamp DESC limit $DEFAULT_NUM"
-                        Log.i(TAG, "Modified clipboard capacity: $DEFAULT_NUM")
+                        newArgs[4] = "timestamp DESC limit $clipboardSize"
+                        log("Modified clipboard capacity: $clipboardSize")
                     }
 
                     chain.proceed(newArgs)
