@@ -19,8 +19,14 @@ class PluginEntry : XposedModule() {
         Log.i(TAG, "attachFramework() called")
     }
 
+    override fun onModuleLoaded() {
+        Log.i(TAG, "onModuleLoaded() called")
+    }
+
     override fun onPackageLoaded(param: XposedModule.PackageLoadedParam) {
         if (param.packageName != PACKAGE_NAME) return
         Log.i(TAG, "Loaded target package: ${param.packageName}")
+
+        // TODO: port hook lama dari PluginEntry.kt.legacy
     }
 }
