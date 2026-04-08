@@ -1,7 +1,6 @@
 package com.chenyue404.gboardhook
 
 import android.util.Log
-import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 
@@ -16,11 +15,6 @@ class PluginEntry : XposedModule() {
         const val DEFAULT_NUM = 10
         const val DEFAULT_TIME = DAY * 3
         private const val TAG = "GboardHook"
-    }
-
-    override fun attachFramework(framework: XposedInterface) {
-        super.attachFramework(framework)
-        Log.i(TAG, "attachFramework() called")
     }
 
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
