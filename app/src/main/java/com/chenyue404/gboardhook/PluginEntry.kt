@@ -3,6 +3,7 @@ package com.chenyue404.gboardhook
 import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface
 
 class PluginEntry : XposedModule() {
 
@@ -11,22 +12,17 @@ class PluginEntry : XposedModule() {
         private const val PACKAGE_NAME = "com.google.android.inputmethod.latin"
     }
 
-    private var framework: XposedInterface? = null
-
     override fun attachFramework(framework: XposedInterface) {
         super.attachFramework(framework)
-        this.framework = framework
         Log.i(TAG, "attachFramework() called")
     }
 
-    override fun onModuleLoaded() {
-        Log.i(TAG, "onModuleLoaded() called")
+    override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
+        Log.i(TAG, "onModuleLoaded() process=${param.processName}")
     }
 
-    override fun onPackageLoaded(param: XposedModule.PackageLoadedParam) {
+    override fun onPackageLoaded(param: XposedModuleInterface.PackageLoadedParam) {
         if (param.packageName != PACKAGE_NAME) return
         Log.i(TAG, "Loaded target package: ${param.packageName}")
-
-        // TODO: port hook lama dari PluginEntry.kt.legacy
     }
 }
