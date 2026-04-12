@@ -1,12 +1,13 @@
 package com.chenyue404.gboardhook
 
+import android.content.ContentResolver
 import android.content.SharedPreferences
 import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
-import java.lang.reflect.Method
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -35,17 +36,17 @@ class PluginEntry : XposedModule() {
         }
     }
 
-    // DIPAKSA: kapasitas clipboard 50
+    // Untuk debugging dulu: paksa 50 item
     private fun getClipboardSize(): Int {
         return 50
     }
 
-    // DIPAKSA: waktu simpan 7 hari
+    // Untuk debugging dulu: paksa 7 hari
     private fun getClipboardTime(): Long {
         return 604800000L
     }
 
-    // DIPAKSA: log aktif
+    // Aktifkan log supaya mudah dicek
     private fun isLogEnabled(): Boolean {
         return true
     }
@@ -54,6 +55,96 @@ class PluginEntry : XposedModule() {
         if (isLogEnabled()) {
             Log.i(TAG, msg)
         }
+    }
+
+    private fun patchSelectionArgs(
+        selection: String?,
+        selectionArgs: Array<*>?,
+        clipboardTime: Long
+    ): Array<String>? {
+        if (selection == null || selectionArgs == null) return null
+
+        val indexOf = selection.indexOf("timestamp >= ?")
+        if (indexOf == -1) return null
+
+        var questionIndexBeforeTarget = 0
+        selection.forEachIndexed { i, c ->
+            if (i >= indexOf) return@forEachIndexed
+            if (c == '?') questionIndexBeforeTarget++
+        }
+
+        if (questionIndexBeforeTarget !in selectionArgs.indices) return null
+
+        val copied = selectionArgs.map { it?.toString() ?: "" }.toTypedArray()
+        val afterTimeStamp = System.currentTimeMillis() - clipboardTime
+        copied[questionIndexBeforeTarget] = afterTimeStamp.toString()
+
+        log(
+            "Modified clipboard retention: ${
+                SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
+                    .format(Date(afterTimeStamp))
+            }"
+        )
+
+        return copied
+    }
+
+    private fun patchSortOrder(
+        sortOrder: String?,
+        clipboardSize: Int
+    ): String? {
+        if (sortOrder == null) return null
+
+        var result = sortOrder
+
+        // Ganti semua "limit 5" jadi "limit X"
+        result = result.replace(
+            Regex("(?i)limit\\s+5\\b"),
+            "limit $clipboardSize"
+        )
+
+        // Kalau ada timestamp desc tapi tidak ada limit, tambahkan
+        val hasTimestampDesc = Regex("(?i)timestamp\\s+desc").containsMatchIn(result)
+        val hasAnyLimit = Regex("(?i)limit\\s+\\d+").containsMatchIn(result)
+
+        if (hasTimestampDesc && !hasAnyLimit) {
+            result = "$result limit $clipboardSize"
+        }
+
+        if (result != sortOrder) {
+            log("Modified sortOrder: $sortOrder -> $result")
+        }
+
+        return result
+    }
+
+    private fun patchBundleQueryArgs(
+        bundle: Bundle?,
+        clipboardSize: Int,
+        clipboardTime: Long
+    ): Bundle? {
+        if (bundle == null) return null
+
+        val newBundle = Bundle(bundle)
+
+        val selection = newBundle.getString(ContentResolver.QUERY_ARG_SQL_SELECTION)
+        val selectionArgs = newBundle.getStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS)
+        val sortOrder = newBundle.getString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER)
+
+        val patchedSelectionArgs = patchSelectionArgs(selection, selectionArgs, clipboardTime)
+        if (patchedSelectionArgs != null) {
+            newBundle.putStringArray(
+                ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,
+                patchedSelectionArgs
+            )
+        }
+
+        val patchedSortOrder = patchSortOrder(sortOrder, clipboardSize)
+        if (patchedSortOrder != null) {
+            newBundle.putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, patchedSortOrder)
+        }
+
+        return newBundle
     }
 
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
@@ -72,66 +163,46 @@ class PluginEntry : XposedModule() {
                 "com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider"
             )
 
-            val queryMethod: Method = providerClass.getDeclaredMethod(
-                "query",
-                Uri::class.java,
-                Array<String>::class.java,
-                String::class.java,
-                Array<String>::class.java,
-                String::class.java
-            )
+            val queryMethods = providerClass.declaredMethods.filter { it.name == "query" }
 
-            hook(queryMethod)
-                .setPriority(XposedInterface.PRIORITY_DEFAULT)
-                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                .intercept { chain ->
-                    val args = chain.args.toTypedArray()
+            for (method in queryMethods) {
+                hook(method)
+                    .setPriority(XposedInterface.PRIORITY_DEFAULT)
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept { chain ->
+                        val args = chain.args.toTypedArray()
+                        val clipboardSize = getClipboardSize()
+                        val clipboardTime = getClipboardTime()
 
-                    val selection = args.getOrNull(2) as? String
-                    val selectionArgs = args.getOrNull(3) as? Array<String>
-                    val sortOrder = args.getOrNull(4) as? String
+                        // query(Uri, projection, selection, selectionArgs, sortOrder)
+                        if (args.size >= 5) {
+                            val selection = args.getOrNull(2) as? String
+                            val selectionArgs = args.getOrNull(3) as? Array<*>
+                            val sortOrder = args.getOrNull(4) as? String
 
-                    val newArgs = args.copyOf()
-
-                    val clipboardTime = getClipboardTime()
-                    val clipboardSize = getClipboardSize()
-
-                    if (selection != null && selectionArgs != null) {
-                        val indexOf = selection.indexOf("timestamp >= ?")
-                        if (indexOf != -1) {
-                            var questionIndexBeforeTarget = 0
-                            selection.forEachIndexed { i, c ->
-                                if (i >= indexOf) return@forEachIndexed
-                                if (c == '?') questionIndexBeforeTarget++
+                            val patchedSelectionArgs =
+                                patchSelectionArgs(selection, selectionArgs, clipboardTime)
+                            if (patchedSelectionArgs != null) {
+                                args[3] = patchedSelectionArgs
                             }
 
-                            if (questionIndexBeforeTarget in selectionArgs.indices) {
-                                val copiedSelectionArgs = selectionArgs.copyOf()
-                                val afterTimeStamp = System.currentTimeMillis() - clipboardTime
-                                copiedSelectionArgs[questionIndexBeforeTarget] = afterTimeStamp.toString()
-                                newArgs[3] = copiedSelectionArgs
-
-                                log(
-                                    "Modified clipboard retention: ${
-                                        SimpleDateFormat(
-                                            "yyyy-MM-dd HH:mm:ss.SSS",
-                                            Locale.ROOT
-                                        ).format(Date(afterTimeStamp))
-                                    }"
-                                )
+                            val patchedSortOrder = patchSortOrder(sortOrder, clipboardSize)
+                            if (patchedSortOrder != null) {
+                                args[4] = patchedSortOrder
                             }
                         }
+
+                        // query(Uri, projection, Bundle, CancellationSignal)
+                        if (args.size >= 3 && args[2] is Bundle) {
+                            val oldBundle = args[2] as Bundle
+                            args[2] = patchBundleQueryArgs(oldBundle, clipboardSize, clipboardTime)
+                        }
+
+                        chain.proceed(args)
                     }
+            }
 
-                    if (sortOrder == "timestamp DESC limit 5") {
-                        newArgs[4] = "timestamp DESC limit $clipboardSize"
-                        log("Modified clipboard capacity: $clipboardSize")
-                    }
-
-                    chain.proceed(newArgs)
-                }
-
-            Log.i(TAG, "query hook installed")
+            Log.i(TAG, "Installed query hooks: ${queryMethods.size}")
         } catch (t: Throwable) {
             Log.e(TAG, "Failed to install query hook", t)
         }
