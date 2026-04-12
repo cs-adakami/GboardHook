@@ -31,30 +31,34 @@ class PluginEntry : XposedModule() {
         return try {
             getRemotePreferences(SP_FILE_NAME)
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to read module preferences", t)
+            log(Log.ERROR, TAG, "Failed to read module preferences", t)
             null
         }
     }
 
-    // Untuk debugging dulu: paksa 50 item
+    // Debug dulu: paksa 50 item
     private fun getClipboardSize(): Int {
         return 50
     }
 
-    // Untuk debugging dulu: paksa 7 hari
+    // Debug dulu: paksa 7 hari
     private fun getClipboardTime(): Long {
         return 604800000L
     }
 
-    // Aktifkan log supaya mudah dicek
+    // Debug dulu: log aktif
     private fun isLogEnabled(): Boolean {
         return true
     }
 
-    private fun log(msg: String) {
+    private fun logInfo(msg: String) {
         if (isLogEnabled()) {
-            Log.i(TAG, msg)
+            log(Log.INFO, TAG, msg)
         }
+    }
+
+    private fun logError(msg: String, tr: Throwable? = null) {
+        log(Log.ERROR, TAG, msg, tr)
     }
 
     private fun patchSelectionArgs(
@@ -79,7 +83,7 @@ class PluginEntry : XposedModule() {
         val afterTimeStamp = System.currentTimeMillis() - clipboardTime
         copied[questionIndexBeforeTarget] = afterTimeStamp.toString()
 
-        log(
+        logInfo(
             "Modified clipboard retention: ${
                 SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
                     .format(Date(afterTimeStamp))
@@ -97,13 +101,11 @@ class PluginEntry : XposedModule() {
 
         var result = sortOrder
 
-        // Ganti semua "limit 5" jadi "limit X"
         result = result.replace(
             Regex("(?i)limit\\s+5\\b"),
             "limit $clipboardSize"
         )
 
-        // Kalau ada timestamp desc tapi tidak ada limit, tambahkan
         val hasTimestampDesc = Regex("(?i)timestamp\\s+desc").containsMatchIn(result)
         val hasAnyLimit = Regex("(?i)limit\\s+\\d+").containsMatchIn(result)
 
@@ -112,7 +114,7 @@ class PluginEntry : XposedModule() {
         }
 
         if (result != sortOrder) {
-            log("Modified sortOrder: $sortOrder -> $result")
+            logInfo("Modified sortOrder: $sortOrder -> $result")
         }
 
         return result
@@ -148,13 +150,13 @@ class PluginEntry : XposedModule() {
     }
 
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
-        Log.i(TAG, "onModuleLoaded() process=${param.processName}")
+        logInfo("onModuleLoaded() process=${param.processName}")
     }
 
     override fun onPackageLoaded(param: XposedModuleInterface.PackageLoadedParam) {
         if (param.packageName != PACKAGE_NAME) return
 
-        Log.i(TAG, "Loaded target package: ${param.packageName}")
+        logInfo("Loaded target package: ${param.packageName}")
 
         val classLoader = param.defaultClassLoader
 
@@ -202,9 +204,9 @@ class PluginEntry : XposedModule() {
                     }
             }
 
-            Log.i(TAG, "Installed query hooks: ${queryMethods.size}")
+            logInfo("Installed query hooks: ${queryMethods.size}")
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to install query hook", t)
+            logError("Failed to install query hook", t)
         }
     }
 }
