@@ -1,6 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string-array name="xposed_scope">
-        <item>com.google.android.inputmethod.latin</item>
+
+    <string-array name="clipboard_capacity_labels">
+        <item>10 item</item>
+        <item>20 item</item>
+        <item>50 item</item>
+        <item>100 item</item>
+        <item>200 item</item>
     </string-array>
+
+    <string-array name="clipboard_capacity_values">
+        <item>10</item>
+        <item>20</item>
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+    </string-array>
+
+    <string-array name="clipboard_expire_labels">
+        <item>3 hari</item>
+        <item>7 hari</item>
+        <item>14 hari</item>
+        <item>30 hari</item>
+        <item>90 hari</item>
+        <item>365 hari</item>
+    </string-array>
+
+    <string-array name="clipboard_expire_values">
+        <item>259200000</item>
+        <item>604800000</item>
+        <item>1209600000</item>
+        <item>2592000000</item>
+        <item>7776000000</item>
+        <item>31536000000</item>
+    </string-array>
+
 </resources>
