@@ -8,8 +8,6 @@ import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
 class PluginEntry : XposedModule() {
@@ -61,6 +59,15 @@ class PluginEntry : XposedModule() {
         log(Log.ERROR, TAG, msg, tr)
     }
 
+    private fun containsPrunePattern(text: String): Boolean {
+        val s = text.lowercase(Locale.ROOT)
+        return s.contains("limit 5") ||
+            (s.contains("timestamp") && s.contains("limit")) ||
+            (s.contains("not in") && s.contains("select")) ||
+            (s.contains("rowid") && s.contains("limit")) ||
+            (s.contains("_id") && s.contains("limit"))
+    }
+
     private fun patchSelectionArgs(
         selection: String?,
         selectionArgs: Array<*>?,
@@ -83,13 +90,7 @@ class PluginEntry : XposedModule() {
         val afterTimeStamp = System.currentTimeMillis() - clipboardTime
         copied[questionIndexBeforeTarget] = afterTimeStamp.toString()
 
-        logInfo(
-            "Modified clipboard retention: ${
-                SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
-                    .format(Date(afterTimeStamp))
-            }"
-        )
-
+        logInfo("Modified retention threshold -> $afterTimeStamp")
         return copied
     }
 
@@ -149,6 +150,47 @@ class PluginEntry : XposedModule() {
         return newBundle
     }
 
+    private fun isLikelyPruneDelete(args: Array<Any?>): Boolean {
+        for (arg in args) {
+            when (arg) {
+                is String -> {
+                    if (containsPrunePattern(arg)) return true
+                }
+
+                is Array<*> -> {
+                    for (item in arg) {
+                        if (item is String && containsPrunePattern(item)) return true
+                    }
+                }
+
+                is Bundle -> {
+                    val selection = arg.getString(ContentResolver.QUERY_ARG_SQL_SELECTION)
+                    val sortOrder = arg.getString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER)
+
+                    if (selection != null && containsPrunePattern(selection)) return true
+                    if (sortOrder != null && containsPrunePattern(sortOrder)) return true
+                }
+            }
+        }
+        return false
+    }
+
+    private fun dumpArgs(args: Array<Any?>): String {
+        return args.joinToString(
+            prefix = "[",
+            postfix = "]"
+        ) { value ->
+            when (value) {
+                null -> "null"
+                is Bundle -> "Bundle($value)"
+                is Array<*> -> value.joinToString(prefix = "Array[", postfix = "]") {
+                    it?.toString() ?: "null"
+                }
+                else -> value.toString()
+            }
+        }
+    }
+
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
         logInfo("onModuleLoaded() process=${param.processName}")
     }
@@ -166,8 +208,9 @@ class PluginEntry : XposedModule() {
             )
 
             val queryMethods = providerClass.declaredMethods.filter { it.name == "query" }
-
             for (method in queryMethods) {
+                logInfo("Hook query: ${method.name}(${method.parameterTypes.joinToString { it.simpleName }})")
+
                 hook(method)
                     .setPriority(XposedInterface.PRIORITY_DEFAULT)
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
@@ -204,9 +247,53 @@ class PluginEntry : XposedModule() {
                     }
             }
 
+            val mutationMethods = providerClass.declaredMethods.filter {
+                it.name == "insert" ||
+                    it.name == "bulkInsert" ||
+                    it.name == "delete" ||
+                    it.name == "update"
+            }
+
+            for (method in mutationMethods) {
+                logInfo("Hook mutation: ${method.name}(${method.parameterTypes.joinToString { it.simpleName }})")
+
+                hook(method)
+                    .setPriority(XposedInterface.PRIORITY_DEFAULT)
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept { chain ->
+                        val args = chain.args.toTypedArray()
+
+                        when (method.name) {
+                            "insert" -> {
+                                logInfo("insert called: ${dumpArgs(args)}")
+                            }
+
+                            "bulkInsert" -> {
+                                logInfo("bulkInsert called: ${dumpArgs(args)}")
+                            }
+
+                            "update" -> {
+                                logInfo("update called: ${dumpArgs(args)}")
+                            }
+
+                            "delete" -> {
+                                logInfo("delete called: ${dumpArgs(args)}")
+
+                                if (isLikelyPruneDelete(args)) {
+                                    logInfo("Blocked suspected prune delete")
+                                    return@intercept 0
+                                }
+                            }
+                        }
+
+                        chain.proceed(args)
+                    }
+            }
+
             logInfo("Installed query hooks: ${queryMethods.size}")
+            logInfo("Installed mutation hooks: ${mutationMethods.size}")
         } catch (t: Throwable) {
-            logError("Failed to install query hook", t)
+            logError("Failed to install provider hooks", t)
         }
     }
 }
