@@ -2,7 +2,8 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
+    android:padding="20dp"
+    android:gravity="center_horizontal"
     android:orientation="vertical">
 
     <Switch
@@ -17,32 +18,42 @@
         android:layout_height="wrap_content"
         android:text="@string/log_switch" />
 
-    <EditText
-        android:id="@+id/et0"
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:hint="@string/clipboard_capacity"
-        android:inputType="number"
-        android:singleLine="true" />
+        android:layout_marginTop="16dp"
+        android:text="Pilih kapasitas clipboard" />
 
-    <EditText
-        android:id="@+id/et1"
+    <Spinner
+        android:id="@+id/spCapacity"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" />
+
+    <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:hint="@string/clipboard_expire_time"
-        android:inputType="number"
-        android:singleLine="true" />
+        android:layout_marginTop="16dp"
+        android:text="Pilih waktu simpan clipboard" />
+
+    <Spinner
+        android:id="@+id/spExpire"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" />
 
     <Button
         android:id="@+id/bt0"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
         android:text="@string/apply" />
 
     <TextView
         android:id="@+id/tvHint"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
         android:gravity="center"
         android:text="@string/restart_hint"
         android:textIsSelectable="true" />
