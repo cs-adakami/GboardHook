@@ -60,7 +60,6 @@ class PluginEntry : XposedModule() {
     }
 
     override fun onPackageLoaded(param: XposedModuleInterface.PackageLoadedParam) {
-
         if (param.packageName != PACKAGE_NAME) return
 
         Log.i(TAG, "Loaded target package: ${param.packageName}")
@@ -68,7 +67,6 @@ class PluginEntry : XposedModule() {
         val classLoader = param.defaultClassLoader
 
         try {
-
             val providerClass = classLoader.loadClass(
                 "com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider"
             )
@@ -86,7 +84,6 @@ class PluginEntry : XposedModule() {
                 .setPriority(XposedInterface.PRIORITY_DEFAULT)
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
-
                     val args = chain.args.toTypedArray()
 
                     val selection = args.getOrNull(2) as? String
@@ -99,28 +96,18 @@ class PluginEntry : XposedModule() {
                     val clipboardSize = getClipboardSize()
 
                     if (selection != null && selectionArgs != null) {
-
                         val indexOf = selection.indexOf("timestamp >= ?")
-
                         if (indexOf != -1) {
-
                             var questionIndexBeforeTarget = 0
-
                             selection.forEachIndexed { i, c ->
                                 if (i >= indexOf) return@forEachIndexed
                                 if (c == '?') questionIndexBeforeTarget++
                             }
 
                             if (questionIndexBeforeTarget in selectionArgs.indices) {
-
                                 val copiedSelectionArgs = selectionArgs.copyOf()
-
-                                val afterTimeStamp =
-                                    System.currentTimeMillis() - clipboardTime
-
-                                copiedSelectionArgs[questionIndexBeforeTarget] =
-                                    afterTimeStamp.toString()
-
+                                val afterTimeStamp = System.currentTimeMillis() - clipboardTime
+                                copiedSelectionArgs[questionIndexBeforeTarget] = afterTimeStamp.toString()
                                 newArgs[3] = copiedSelectionArgs
 
                                 log(
@@ -136,10 +123,7 @@ class PluginEntry : XposedModule() {
                     }
 
                     if (sortOrder == "timestamp DESC limit 5") {
-
-                        newArgs[4] =
-                            "timestamp DESC limit $clipboardSize"
-
+                        newArgs[4] = "timestamp DESC limit $clipboardSize"
                         log("Modified clipboard capacity: $clipboardSize")
                     }
 
@@ -147,9 +131,7 @@ class PluginEntry : XposedModule() {
                 }
 
             Log.i(TAG, "query hook installed")
-
         } catch (t: Throwable) {
-
             Log.e(TAG, "Failed to install query hook", t)
         }
     }
