@@ -1,6 +1,5 @@
 package com.chenyue404.gboardhook
 
-import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
@@ -19,20 +18,22 @@ class PluginEntry : XposedModule() {
         const val SP_KEY = "key"
         const val SP_KEY_LOG = "key_log"
         const val PACKAGE_NAME = "com.google.android.inputmethod.latin"
+
         const val DAY: Long = 1000L * 60 * 60 * 24
         const val DEFAULT_NUM = 10
         const val DEFAULT_TIME = DAY * 3
+
         private const val TAG = "GboardHook"
     }
 
     private fun getModulePrefs(): SharedPreferences? {
-    return try {
-        getRemotePreferences(SP_FILE_NAME)
-    } catch (t: Throwable) {
-        Log.e(TAG, "Failed to read module preferences", t)
-        null
+        return try {
+            getRemotePreferences(SP_FILE_NAME)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to read module preferences", t)
+            null
+        }
     }
-}
 
     private fun getClipboardSize(): Int {
         val raw = getModulePrefs()?.getString(SP_KEY, null)
@@ -59,6 +60,7 @@ class PluginEntry : XposedModule() {
     }
 
     override fun onPackageLoaded(param: XposedModuleInterface.PackageLoadedParam) {
+
         if (param.packageName != PACKAGE_NAME) return
 
         Log.i(TAG, "Loaded target package: ${param.packageName}")
@@ -66,6 +68,7 @@ class PluginEntry : XposedModule() {
         val classLoader = param.defaultClassLoader
 
         try {
+
             val providerClass = classLoader.loadClass(
                 "com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider"
             )
@@ -83,6 +86,7 @@ class PluginEntry : XposedModule() {
                 .setPriority(XposedInterface.PRIORITY_DEFAULT)
                 .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                 .intercept { chain ->
+
                     val args = chain.args.toTypedArray()
 
                     val selection = args.getOrNull(2) as? String
@@ -95,24 +99,36 @@ class PluginEntry : XposedModule() {
                     val clipboardSize = getClipboardSize()
 
                     if (selection != null && selectionArgs != null) {
+
                         val indexOf = selection.indexOf("timestamp >= ?")
+
                         if (indexOf != -1) {
+
                             var questionIndexBeforeTarget = 0
+
                             selection.forEachIndexed { i, c ->
                                 if (i >= indexOf) return@forEachIndexed
                                 if (c == '?') questionIndexBeforeTarget++
                             }
 
                             if (questionIndexBeforeTarget in selectionArgs.indices) {
+
                                 val copiedSelectionArgs = selectionArgs.copyOf()
-                                val afterTimeStamp = System.currentTimeMillis() - clipboardTime
-                                copiedSelectionArgs[questionIndexBeforeTarget] = afterTimeStamp.toString()
+
+                                val afterTimeStamp =
+                                    System.currentTimeMillis() - clipboardTime
+
+                                copiedSelectionArgs[questionIndexBeforeTarget] =
+                                    afterTimeStamp.toString()
+
                                 newArgs[3] = copiedSelectionArgs
 
                                 log(
                                     "Modified clipboard retention: ${
-                                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
-                                            .format(Date(afterTimeStamp))
+                                        SimpleDateFormat(
+                                            "yyyy-MM-dd HH:mm:ss.SSS",
+                                            Locale.ROOT
+                                        ).format(Date(afterTimeStamp))
                                     }"
                                 )
                             }
@@ -120,7 +136,10 @@ class PluginEntry : XposedModule() {
                     }
 
                     if (sortOrder == "timestamp DESC limit 5") {
-                        newArgs[4] = "timestamp DESC limit $clipboardSize"
+
+                        newArgs[4] =
+                            "timestamp DESC limit $clipboardSize"
+
                         log("Modified clipboard capacity: $clipboardSize")
                     }
 
@@ -128,7 +147,9 @@ class PluginEntry : XposedModule() {
                 }
 
             Log.i(TAG, "query hook installed")
+
         } catch (t: Throwable) {
+
             Log.e(TAG, "Failed to install query hook", t)
         }
     }
