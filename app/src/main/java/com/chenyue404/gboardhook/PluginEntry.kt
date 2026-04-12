@@ -35,18 +35,19 @@ class PluginEntry : XposedModule() {
         }
     }
 
+    // DIPAKSA: kapasitas clipboard 50
     private fun getClipboardSize(): Int {
-        val raw = getModulePrefs()?.getString(SP_KEY, null)
-        return raw?.split(",")?.getOrNull(0)?.toIntOrNull() ?: DEFAULT_NUM
+        return 50
     }
 
+    // DIPAKSA: waktu simpan 7 hari
     private fun getClipboardTime(): Long {
-        val raw = getModulePrefs()?.getString(SP_KEY, null)
-        return raw?.split(",")?.getOrNull(1)?.toLongOrNull() ?: DEFAULT_TIME
+        return 604800000L
     }
 
+    // DIPAKSA: log aktif
     private fun isLogEnabled(): Boolean {
-        return getModulePrefs()?.getBoolean(SP_KEY_LOG, false) ?: false
+        return true
     }
 
     private fun log(msg: String) {
