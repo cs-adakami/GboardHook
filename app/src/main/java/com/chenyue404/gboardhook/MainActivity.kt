@@ -13,7 +13,7 @@ import android.widget.Toast
 import androidx.core.net.toUri
 
 /**
- * Created by cy on 2022/1/14.
+ * MainActivity untuk mengubah setting clipboard hook.
  */
 class MainActivity : Activity() {
 
@@ -27,32 +27,38 @@ class MainActivity : Activity() {
         val bt0 = findViewById<Button>(R.id.bt0)
         val swLog = findViewById<Switch>(R.id.swLog)
 
+        // Gunakan MODE_PRIVATE untuk keamanan di Android modern
         val pref: SharedPreferences? = try {
-            getSharedPreferences(PluginEntry.SP_FILE_NAME, MODE_WORLD_READABLE)
+            getSharedPreferences(PluginEntry.SP_FILE_NAME, MODE_PRIVATE)
         } catch (e: SecurityException) {
             Log.d("MainActivity", "getSharedPreferences failed --- $e")
             Toast.makeText(this, "Failed to read configuration", Toast.LENGTH_SHORT).show()
             null
         }
 
+        // Ambil nilai yang tersimpan dan tampilkan di UI
         pref?.getString(PluginEntry.SP_KEY, null)?.split(",")?.let { list ->
-            et0.text.append(list[0])
-            et1.text.append(list[1])
+            et0.setText(list.getOrNull(0) ?: PluginEntry.DEFAULT_NUM.toString())
+            et1.setText(list.getOrNull(1) ?: PluginEntry.DEFAULT_TIME.toString())
             val switchOn = list.getOrNull(2)?.equals("true", true) ?: false
             sw0.isChecked = switchOn
         }
+
         swLog.isChecked = pref?.getBoolean(PluginEntry.SP_KEY_LOG, false) ?: false
 
+        // Simpan setting saat tombol ditekan
         bt0.setOnClickListener {
             val num = et0.text.toString().toIntOrNull() ?: PluginEntry.DEFAULT_NUM
             val time = et1.text.toString().toLongOrNull() ?: PluginEntry.DEFAULT_TIME
             val switchOn = sw0.isChecked.toString()
+
             pref?.edit()?.apply {
                 putString(PluginEntry.SP_KEY, "$num,$time,$switchOn")
                 putBoolean(PluginEntry.SP_KEY_LOG, swLog.isChecked)
                 apply()
             }
 
+            // Buka settings Gboard untuk memaksa reload jika perlu
             startActivity(
                 Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                     .apply {
@@ -60,6 +66,8 @@ class MainActivity : Activity() {
                         data = "package:${PluginEntry.PACKAGE_NAME}".toUri()
                     })
         }
+
+        // Tombol info / link ke GitHub
         findViewById<TextView>(R.id.tvHint).setOnClickListener {
             startActivity(
                 Intent(
