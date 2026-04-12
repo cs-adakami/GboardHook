@@ -1,8 +1,8 @@
 <resources>
-    <string name="ignore_package_limit">Ignore package name limit (enable this only if your Gboard package name has been changed)</string>
-    <string name="log_switch">Enable logging</string>
-    <string name="clipboard_capacity">Clipboard capacity, default 10</string>
-    <string name="clipboard_expire_time">Clipboard retention time, default 3 days, unit: milliseconds</string>
-    <string name="apply">Apply</string>
-    <string name="restart_hint">After applying, restart Gboard. On first use, reboot the phone. https://github.com/chenyue404/GboardHook</string>
+    <string name="ignore_package_limit">Abaikan batas nama paket (aktifkan hanya jika nama paket Gboard sudah diubah)</string>
+    <string name="log_switch">Aktifkan log</string>
+    <string name="clipboard_capacity">Kapasitas clipboard, default 10</string>
+    <string name="clipboard_expire_time">Waktu simpan clipboard, default 3 hari, satuan milidetik</string>
+    <string name="apply">Terapkan</string>
+    <string name="restart_hint">Setelah diterapkan, restart Gboard. Pada penggunaan pertama, restart perangkat. https://github.com/chenyue404/GboardHook</string>
 </resources>
