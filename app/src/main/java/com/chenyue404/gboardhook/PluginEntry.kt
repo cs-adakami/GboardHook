@@ -1,9 +1,12 @@
 package com.chenyue404.gboardhook
 
 import android.app.Application
+import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.os.Bundle
+import android.os.CancellationSignal
 import androidx.core.content.edit
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
@@ -30,6 +33,7 @@ class PluginEntry : IXposedHookLoadPackage {
         const val DAY: Long = 1000 * 60 * 60 * 24
         const val DEFAULT_NUM = 10
         const val DEFAULT_TIME = DAY * 3
+        private const val CLIPBOARD_PROVIDER = "com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider"
         private val LIMIT_REGEX = Regex("\\blimit\\s+\\d+\\b", RegexOption.IGNORE_CASE)
     }
 
@@ -69,6 +73,8 @@ class PluginEntry : IXposedHookLoadPackage {
         ) {
             return
         }
+
+        log("handleLoadPackage: $packageName")
 
         findAndHookMethod(
             Application::class.java,
@@ -141,9 +147,14 @@ class PluginEntry : IXposedHookLoadPackage {
             }
         )
 
-        tryHook("com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider#query") { name ->
+        hookClipboardProviderLegacy(classLoader)
+        hookClipboardProviderBundle(classLoader)
+    }
+
+    private fun hookClipboardProviderLegacy(classLoader: ClassLoader) {
+        tryHook("$CLIPBOARD_PROVIDER#query-legacy") { name ->
             findAndHookMethod(
-                "com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider",
+                CLIPBOARD_PROVIDER,
                 classLoader,
                 "query",
                 Uri::class.java,
@@ -154,47 +165,110 @@ class PluginEntry : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         log(name)
-                        val arg0 = param.args[0] as Uri
-                        val arg1 = if (param.args[1] != null) param.args[1] as Array<*> else null
-                        val arg2 = param.args[2].toString()
-                        val arg3 = if (param.args[3] != null) param.args[3] as Array<String> else null
-                        val arg4 = param.args[4]?.toString()
-                        log("query, arg0=$arg0, arg1=${arg1?.joinToString()}, arg2=$arg2, arg3=${arg3?.joinToString()}, arg4=$arg4")
+                        val uri = param.args[0] as Uri
+                        val projection = if (param.args[1] != null) param.args[1] as Array<*> else null
+                        val selection = param.args[2]?.toString().orEmpty()
+                        val selectionArgs = if (param.args[3] != null) param.args[3] as Array<String> else null
+                        val sortOrder = param.args[4]?.toString()
+                        log("legacy query, uri=$uri, projection=${projection?.joinToString()}, selection=$selection, selectionArgs=${selectionArgs?.joinToString()}, sortOrder=$sortOrder")
 
-                        val indexOf = arg2.indexOf("timestamp >= ?")
-                        if (indexOf != -1) {
-                            var indexOfWhen = 0
-                            StringBuilder(arg2).forEachIndexed { index, c ->
-                                if (index >= indexOf) return@forEachIndexed
-                                if (c == '?') {
-                                    indexOfWhen++
-                                }
-                            }
-
-                            val afterTimeStamp = System.currentTimeMillis() - clipboardTextTime
-                            arg3?.let {
-                                if (indexOfWhen in it.indices) {
-                                    it[indexOfWhen] = afterTimeStamp.toString()
-                                    param.args[3] = it
-                                }
-                            }
-                            val formatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date(afterTimeStamp))
-                            log("修改时间限制, $formatted")
+                        rewriteSelectionArgs(selection, selectionArgs)?.let {
+                            param.args[3] = it
                         }
-
-                        if (arg4 != null && LIMIT_REGEX.containsMatchIn(arg4)) {
-                            val replaced = LIMIT_REGEX.replace(arg4, "limit $clipboardTextSize")
-                            param.args[4] = replaced
-                            log("修改大小限制, old=$arg4, new=$replaced")
+                        rewriteLimitString(sortOrder)?.let {
+                            param.args[4] = it
+                            log("legacy limit rewritten: $it")
                         }
                     }
 
                     override fun afterHookedMethod(param: MethodHookParam) {
-                        log("query end, ${(param.result as Cursor).count}")
+                        logCursorCount("legacy query", param.result)
                     }
                 }
             )
         }
+    }
+
+    private fun hookClipboardProviderBundle(classLoader: ClassLoader) {
+        tryHook("$CLIPBOARD_PROVIDER#query-bundle") { name ->
+            findAndHookMethod(
+                CLIPBOARD_PROVIDER,
+                classLoader,
+                "query",
+                Uri::class.java,
+                Array<String>::class.java,
+                Bundle::class.java,
+                CancellationSignal::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        log(name)
+                        val uri = param.args[0] as Uri
+                        val projection = if (param.args[1] != null) param.args[1] as Array<*> else null
+                        val queryArgs = (param.args[2] as? Bundle) ?: Bundle()
+                        val selection = queryArgs.getString(ContentResolver.QUERY_ARG_SQL_SELECTION).orEmpty()
+                        val selectionArgs = queryArgs.getStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS)
+                        val sortOrder = queryArgs.getString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER)
+                        val sqlLimit = queryArgs.getString(ContentResolver.QUERY_ARG_SQL_LIMIT)
+                        log("bundle query, uri=$uri, projection=${projection?.joinToString()}, selection=$selection, selectionArgs=${selectionArgs?.joinToString()}, sortOrder=$sortOrder, sqlLimit=$sqlLimit")
+
+                        rewriteSelectionArgs(selection, selectionArgs)?.let {
+                            queryArgs.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, it)
+                        }
+
+                        rewriteLimitString(sortOrder)?.let {
+                            queryArgs.putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, it)
+                            log("bundle sort order rewritten: $it")
+                        }
+
+                        if (!sqlLimit.isNullOrBlank()) {
+                            queryArgs.putString(ContentResolver.QUERY_ARG_SQL_LIMIT, clipboardTextSize.toString())
+                            log("bundle sql limit rewritten: ${clipboardTextSize}")
+                        }
+
+                        param.args[2] = queryArgs
+                    }
+
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        logCursorCount("bundle query", param.result)
+                    }
+                }
+            )
+        }
+    }
+
+    private fun rewriteSelectionArgs(selection: String, selectionArgs: Array<String>?): Array<String>? {
+        if (!selection.contains("timestamp >= ?") || selectionArgs == null) {
+            return null
+        }
+        val indexOf = selection.indexOf("timestamp >= ?")
+        var indexOfWhen = 0
+        StringBuilder(selection).forEachIndexed { index, c ->
+            if (index >= indexOf) return@forEachIndexed
+            if (c == '?') {
+                indexOfWhen++
+            }
+        }
+        if (indexOfWhen !in selectionArgs.indices) {
+            return null
+        }
+        val updatedArgs = selectionArgs.copyOf()
+        val afterTimeStamp = System.currentTimeMillis() - clipboardTextTime
+        updatedArgs[indexOfWhen] = afterTimeStamp.toString()
+        val formatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date(afterTimeStamp))
+        log("timestamp rewritten: $formatted")
+        return updatedArgs
+    }
+
+    private fun rewriteLimitString(value: String?): String? {
+        if (value.isNullOrBlank() || !LIMIT_REGEX.containsMatchIn(value)) {
+            return null
+        }
+        return LIMIT_REGEX.replace(value, "limit $clipboardTextSize")
+    }
+
+    private fun logCursorCount(prefix: String, result: Any?) {
+        val cursor = result as? Cursor ?: return
+        log("$prefix end, count=${cursor.count}")
     }
 
     private fun tryHook(logStr: String, unit: (name: String) -> Unit) {
@@ -204,6 +278,8 @@ class PluginEntry : IXposedHookLoadPackage {
             log("NoSuchMethodError--$logStr")
         } catch (e: ClassNotFoundError) {
             log("ClassNotFoundError--$logStr")
+        } catch (e: Throwable) {
+            log("HookError--$logStr -- $e")
         }
     }
 
