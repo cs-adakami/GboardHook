@@ -2,7 +2,6 @@ package com.chenyue404.gboardhook
 
 import android.app.Application
 import android.content.Context
-import android.content.SharedPreferences
 import android.database.Cursor
 import android.net.Uri
 import androidx.core.content.edit
@@ -38,7 +37,7 @@ class PluginEntry : IXposedHookLoadPackage {
         loadLibrary("dexkit")
     }
 
-    private fun getPref(): SharedPreferences? {
+    private fun getPref(): XSharedPreferences? {
         val pref = XSharedPreferences(BuildConfig.APPLICATION_ID, SP_FILE_NAME)
         return if (pref.file.canRead()) pref else null
     }
@@ -206,84 +205,7 @@ class PluginEntry : IXposedHookLoadPackage {
                     }
                 }
             )
-        }
-
-//        tryHook("SQLiteQuery#query") {
-//            findAndHookMethod(
-//                "android.database.sqlite.SQLiteDatabase",
-//                classLoader,
-//                "query",
-//                "java.lang.String",
-//                "java.lang.String[]",
-//                "java.lang.String",
-//                "java.lang.String[]",
-//                "java.lang.String",
-//                "java.lang.String",
-//                "java.lang.String",
-//                object : XC_MethodHook() {
-//                    override fun beforeHookedMethod(param: MethodHookParam) {
-//                        val args = param.args
-//                        val table = args.first().toString()
-//                        if (table == "clips") {
-//                            val arg1 = if (param.args[1] != null) {
-//                                param.args[1] as Array<*>
-//                            } else null
-//                            val arg2 = param.args[2].toString()
-//                            val arg3 = if (param.args[3] != null) {
-//                                param.args[3] as Array<String>
-//                            } else null
-//                            val arg4 = param.args[4]
-//                            val arg5 = param.args[5]
-//                            val arg6 = param.args[6]
-//                            log("SQLiteQuery#query, arg1=${arg1?.joinToString()}, arg2=$arg2, arg3=${arg3?.joinToString()}, arg4=$arg4, arg5=$arg5, arg6=$arg6")
-//                        }
-//                    }
-//                }
-//            )
-//        }
-
-
-//        try {
-//            val dexFile = DexFile(lpparam.appInfo.sourceDir)
-//            val entries = dexFile.entries()
-//            while (entries.hasMoreElements()) {
-//                val className = entries.nextElement()
-//                try {
-//                    val clazz = lpparam.classLoader.loadClass(className)
-//                    // 查找是否有 getDumpableTag 方法
-//                    val method = clazz.declaredMethods.firstOrNull {
-//                        it.parameterTypes.contentEquals(
-//                            arrayOf(
-//                                ImageView::class.java, ImageView::class.java, String::class.java
-//                            )
-//                        ) && it.returnType == Void.TYPE
-//                    } ?: continue
-//
-//                    // 找到了候选类，hook它
-//                    log("Hooking candidate: $className")
-//                    findAndHookMethod(
-//                        clazz,
-//                        "E",
-//                        object : XC_MethodHook() {
-//                            override fun beforeHookedMethod(param: MethodHookParam) {
-//                                val x = XposedHelpers.getIntField(param.thisObject, "x")
-//                                val p = XposedHelpers.getIntField(param.thisObject, "p")
-//                                log("$className#E, x=$x, p=$p")
-//                                XposedHelpers.setIntField(
-//                                    param.thisObject,
-//                                    "p",
-//                                    0
-//                                )
-//                            }
-//                        }
-//                    )
-//                } catch (e: Throwable) {
-//                    // 加载失败的类忽略
-//                }
-//            }
-//        } catch (e: Throwable) {
-//            log("Error scanning dex: $e")
-//        }
+        )
     }
 
     private fun tryHook(logStr: String, unit: ((name: String) -> Unit)) {
@@ -327,7 +249,6 @@ class PluginEntry : IXposedHookLoadPackage {
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         log(tag)
-//                        printInfo("${tag}-before", param.thisObject)
                         param.result = null
                     }
                 })
@@ -356,9 +277,6 @@ class PluginEntry : IXposedHookLoadPackage {
         return methodData.toDexMethod()
     }
 
-    /**
-     * 写死enable_clipboard_entity_extraction的值，不然limit永远是100，查出来就只有5个
-     */
     private fun hookReadConfig(dexMethod: DexMethod, classLoader: ClassLoader) {
         val methodName = dexMethod.name
         val className = dexMethod.className
@@ -376,13 +294,6 @@ class PluginEntry : IXposedHookLoadPackage {
                             param.result = false
                         }
                     }
-
-//                    override fun afterHookedMethod(param: MethodHookParam) {
-//                        val name = XposedHelpers.getObjectField(param.thisObject, "a").toString()
-//                        if (name.contains("clipboard")) {
-//                            log("$tag, name=$name, result=${param.result}")
-//                        }
-//                    }
                 })
         }
     }
