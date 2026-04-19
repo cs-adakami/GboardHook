@@ -30,6 +30,7 @@ class PluginEntry : IXposedHookLoadPackage {
         const val DAY: Long = 1000 * 60 * 60 * 24
         const val DEFAULT_NUM = 10
         const val DEFAULT_TIME = DAY * 3
+        private val LIMIT_REGEX = Regex("\\blimit\\s+\\d+\\b", RegexOption.IGNORE_CASE)
     }
 
     init {
@@ -157,7 +158,7 @@ class PluginEntry : IXposedHookLoadPackage {
                         val arg1 = if (param.args[1] != null) param.args[1] as Array<*> else null
                         val arg2 = param.args[2].toString()
                         val arg3 = if (param.args[3] != null) param.args[3] as Array<String> else null
-                        val arg4 = param.args[4]
+                        val arg4 = param.args[4]?.toString()
                         log("query, arg0=$arg0, arg1=${arg1?.joinToString()}, arg2=$arg2, arg3=${arg3?.joinToString()}, arg4=$arg4")
 
                         val indexOf = arg2.indexOf("timestamp >= ?")
@@ -172,16 +173,19 @@ class PluginEntry : IXposedHookLoadPackage {
 
                             val afterTimeStamp = System.currentTimeMillis() - clipboardTextTime
                             arg3?.let {
-                                it[indexOfWhen] = afterTimeStamp.toString()
-                                param.args[3] = it
+                                if (indexOfWhen in it.indices) {
+                                    it[indexOfWhen] = afterTimeStamp.toString()
+                                    param.args[3] = it
+                                }
                             }
                             val formatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date(afterTimeStamp))
                             log("修改时间限制, $formatted")
                         }
 
-                        if (arg4 == "timestamp DESC limit 5") {
-                            param.args[4] = "timestamp DESC limit $clipboardTextSize"
-                            log("修改大小限制, $clipboardTextSize")
+                        if (arg4 != null && LIMIT_REGEX.containsMatchIn(arg4)) {
+                            val replaced = LIMIT_REGEX.replace(arg4, "limit $clipboardTextSize")
+                            param.args[4] = replaced
+                            log("修改大小限制, old=$arg4, new=$replaced")
                         }
                     }
 
