@@ -28,10 +28,10 @@ class MainActivity : Activity() {
         val swLog = findViewById<Switch>(R.id.swLog)
 
         val pref: SharedPreferences? = try {
-            getSharedPreferences(PluginEntry.SP_FILE_NAME, MODE_WORLD_READABLE)
+            getSharedPreferences(PluginEntry.SP_FILE_NAME, MODE_PRIVATE)
         } catch (e: SecurityException) {
-            Log.d("MainActivity", "getSharedPreferences失败---$e")
-            Toast.makeText(this, "读取配置失败", Toast.LENGTH_SHORT).show()
+            Log.d("MainActivity", "getSharedPreferences gagal --- $e")
+            Toast.makeText(this, "Baca konfigurasi gagal", Toast.LENGTH_SHORT).show()
             null
         }
 
@@ -58,7 +58,8 @@ class MainActivity : Activity() {
                     .apply {
                         addCategory(Intent.CATEGORY_DEFAULT)
                         data = "package:${PluginEntry.PACKAGE_NAME}".toUri()
-                    })
+                    }
+            )
         }
         findViewById<TextView>(R.id.tvHint).setOnClickListener {
             startActivity(
