@@ -1,4 +1,0 @@
-minApiVersion=101
-targetApiVersion=101
-staticScope=true
-description=Modify Gboard clipboard item count and expiry time
