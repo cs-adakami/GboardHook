@@ -8,3 +8,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "GboardHook"
 include ':app'
+include ':xposed-stubs'
