@@ -31,8 +31,8 @@ class PluginEntry : IXposedHookLoadPackage {
         const val TAG = "xposed-Gboard-hook-"
         const val PACKAGE_NAME = "com.google.android.inputmethod.latin"
         const val DAY: Long = 1000 * 60 * 60 * 24
-        const val DEFAULT_NUM = 10
-        const val DEFAULT_TIME = DAY * 3
+        const val DEFAULT_NUM = 100
+        const val DEFAULT_TIME = DAY * 7
         private const val CLIPBOARD_PROVIDER = "com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider"
         private val LIMIT_REGEX = Regex("\\blimit\\s+\\d+\\b", RegexOption.IGNORE_CASE)
     }
