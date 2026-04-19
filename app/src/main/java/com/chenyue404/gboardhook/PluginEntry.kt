@@ -20,7 +20,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-
 class PluginEntry : IXposedHookLoadPackage {
     companion object {
         const val SP_FILE_NAME = "GboardinHook"
@@ -43,13 +42,11 @@ class PluginEntry : IXposedHookLoadPackage {
     }
 
     private val clipboardTextSize by lazy {
-        getPref()?.getString(SP_KEY, null)?.split(",")?.get(0)?.toIntOrNull()
-            ?: DEFAULT_NUM
+        getPref()?.getString(SP_KEY, null)?.split(",")?.getOrNull(0)?.toIntOrNull() ?: DEFAULT_NUM
     }
 
     private val clipboardTextTime by lazy {
-        getPref()?.getString(SP_KEY, null)?.split(",")?.get(1)?.toLongOrNull()
-            ?: DEFAULT_TIME
+        getPref()?.getString(SP_KEY, null)?.split(",")?.getOrNull(1)?.toLongOrNull() ?: DEFAULT_TIME
     }
 
     private val logSwitch by lazy {
@@ -57,8 +54,9 @@ class PluginEntry : IXposedHookLoadPackage {
     }
 
     private fun log(str: String) {
-        if (logSwitch)
+        if (logSwitch) {
             XposedBridge.log(TAG + "\n" + str)
+        }
     }
 
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
@@ -66,8 +64,7 @@ class PluginEntry : IXposedHookLoadPackage {
         val classLoader = lpparam.classLoader
 
         if (packageName != PACKAGE_NAME &&
-            getPref()?.getString(SP_KEY, null)?.split(",")?.getOrNull(2)
-                ?.equals("true", true) == false
+            getPref()?.getString(SP_KEY, null)?.split(",")?.getOrNull(2)?.equals("true", true) == false
         ) {
             return
         }
@@ -82,19 +79,14 @@ class PluginEntry : IXposedHookLoadPackage {
                         DexKitBridge.create(classLoader, true)
                     }
                     val context = param.args.first() as Context
-                    val sp = context.getSharedPreferences(
-                        "gboard_hook",
-                        Context.MODE_PRIVATE
-                    )
+                    val sp = context.getSharedPreferences("gboard_hook", Context.MODE_PRIVATE)
                     val spKeyMethod = "SP_KEY_METHOD"
                     val spKeyMethodReadConfig = "SP_KEY_METHOD_READ_CONFIG"
                     val spKeyVersion = "SP_KEY_VERSION"
-                    val versionCode = context.packageManager.getPackageInfo(
-                        context.packageName,
-                        0
-                    ).versionCode
+                    val versionCode = context.packageManager.getPackageInfo(context.packageName, 0).versionCode
                     val gboardVersion = sp.getInt(spKeyVersion, -1)
                     val isSameVersion = versionCode == gboardVersion
+
                     val methodStr = sp.getString(spKeyMethod, null)
                     val dexMethod: DexMethod? = methodStr?.let {
                         try {
@@ -105,7 +97,8 @@ class PluginEntry : IXposedHookLoadPackage {
                             null
                         }
                     }
-                    (if (isSameVersion && dexMethod != null) {
+
+                    val adapterMethod = if (isSameVersion && dexMethod != null) {
                         dexMethod
                     } else {
                         val method = findAdapterMethod(dexBridge)
@@ -116,9 +109,8 @@ class PluginEntry : IXposedHookLoadPackage {
                             }
                         }
                         method
-                    })?.let {
-                        hookAdapter(it, classLoader)
                     }
+                    adapterMethod?.let { hookAdapter(it, classLoader) }
 
                     val methodReadConfigStr = sp.getString(spKeyMethodReadConfig, null)
                     val dexMethodReadConfig: DexMethod? = methodReadConfigStr?.let {
@@ -130,7 +122,8 @@ class PluginEntry : IXposedHookLoadPackage {
                             null
                         }
                     }
-                    (if (isSameVersion && dexMethodReadConfig != null) {
+
+                    val readConfigMethod = if (isSameVersion && dexMethodReadConfig != null) {
                         dexMethodReadConfig
                     } else {
                         val method = findReadConfigMethod(dexBridge)
@@ -141,9 +134,8 @@ class PluginEntry : IXposedHookLoadPackage {
                             }
                         }
                         method
-                    })?.let {
-                        hookReadConfig(it, classLoader)
                     }
+                    readConfigMethod?.let { hookReadConfig(it, classLoader) }
                 }
             }
         )
@@ -162,38 +154,31 @@ class PluginEntry : IXposedHookLoadPackage {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         log(name)
                         val arg0 = param.args[0] as Uri
-                        val arg1 = if (param.args[1] != null) {
-                            param.args[1] as Array<*>
-                        } else null
+                        val arg1 = if (param.args[1] != null) param.args[1] as Array<*> else null
                         val arg2 = param.args[2].toString()
-                        val arg3 = if (param.args[3] != null) {
-                            param.args[3] as Array<String>
-                        } else null
+                        val arg3 = if (param.args[3] != null) param.args[3] as Array<String> else null
                         val arg4 = param.args[4]
                         log("query, arg0=$arg0, arg1=${arg1?.joinToString()}, arg2=$arg2, arg3=${arg3?.joinToString()}, arg4=$arg4")
 
                         val indexOf = arg2.indexOf("timestamp >= ?")
                         if (indexOf != -1) {
-                            var indexOfWen = 0
+                            var indexOfWhen = 0
                             StringBuilder(arg2).forEachIndexed { index, c ->
                                 if (index >= indexOf) return@forEachIndexed
                                 if (c == '?') {
-                                    indexOfWen++
+                                    indexOfWhen++
                                 }
                             }
 
                             val afterTimeStamp = System.currentTimeMillis() - clipboardTextTime
                             arg3?.let {
-                                it[indexOfWen] = afterTimeStamp.toString()
+                                it[indexOfWhen] = afterTimeStamp.toString()
                                 param.args[3] = it
                             }
-                            log(
-                                "修改时间限制, ${
-                                    SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT)
-                                        .format(Date(afterTimeStamp))
-                                }"
-                            )
+                            val formatted = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.ROOT).format(Date(afterTimeStamp))
+                            log("修改时间限制, $formatted")
                         }
+
                         if (arg4 == "timestamp DESC limit 5") {
                             param.args[4] = "timestamp DESC limit $clipboardTextSize"
                             log("修改大小限制, $clipboardTextSize")
@@ -205,10 +190,10 @@ class PluginEntry : IXposedHookLoadPackage {
                     }
                 }
             )
-        )
+        }
     }
 
-    private fun tryHook(logStr: String, unit: ((name: String) -> Unit)) {
+    private fun tryHook(logStr: String, unit: (name: String) -> Unit) {
         try {
             unit(logStr)
         } catch (e: NoSuchMethodError) {
@@ -231,6 +216,7 @@ class PluginEntry : IXposedHookLoadPackage {
                 usingNumbers(5)
             }
         }.singleOrNull()
+
         if (methodData == null) {
             log("Can't find adapter")
             return null
@@ -245,13 +231,16 @@ class PluginEntry : IXposedHookLoadPackage {
         log(tag)
         tryHook(tag) {
             findAndHookMethod(
-                className, classLoader, methodName,
+                className,
+                classLoader,
+                methodName,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         log(tag)
                         param.result = null
                     }
-                })
+                }
+            )
         }
     }
 
@@ -270,6 +259,7 @@ class PluginEntry : IXposedHookLoadPackage {
                 returnType("java.lang.Object")
             }
         }.singleOrNull()
+
         if (methodData == null) {
             log("Can't find ReadConfig")
             return null
@@ -284,17 +274,18 @@ class PluginEntry : IXposedHookLoadPackage {
         log(tag)
         tryHook(tag) {
             findAndHookMethod(
-                className, classLoader, methodName,
+                className,
+                classLoader,
+                methodName,
                 object : XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
                         val name = XposedHelpers.getObjectField(param.thisObject, "a").toString()
-                        if (name == "enable_clipboard_entity_extraction"
-                            || name == "enable_clipboard_query_refactoring"
-                        ) {
+                        if (name == "enable_clipboard_entity_extraction" || name == "enable_clipboard_query_refactoring") {
                             param.result = false
                         }
                     }
-                })
+                }
+            )
         }
     }
 }
