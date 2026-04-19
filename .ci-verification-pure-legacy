@@ -1,0 +1,1 @@
+Verification branch after removing modern LSPosed metadata so the module loads via pure legacy path.
