@@ -35,13 +35,22 @@ class MainActivity : Activity() {
             null
         }
 
-        pref?.getString(PluginEntry.SP_KEY, null)?.split(",")?.let { list ->
-            et0.text.append(list[0])
-            et1.text.append(list[1])
-            val switchOn = list.getOrNull(2)?.equals("true", true) ?: false
-            sw0.isChecked = switchOn
-        }
+        val saved = pref?.getString(PluginEntry.SP_KEY, null)?.split(",")
+        val defaultSwitchOn = true
+        val defaultNum = PluginEntry.DEFAULT_NUM.toString()
+        val defaultTime = PluginEntry.DEFAULT_TIME.toString()
+
+        et0.setText(saved?.getOrNull(0) ?: defaultNum)
+        et1.setText(saved?.getOrNull(1) ?: defaultTime)
+        sw0.isChecked = saved?.getOrNull(2)?.equals("true", true) ?: defaultSwitchOn
         swLog.isChecked = pref?.getBoolean(PluginEntry.SP_KEY_LOG, false) ?: false
+
+        if (saved == null) {
+            pref?.edit()?.apply {
+                putString(PluginEntry.SP_KEY, "$defaultNum,$defaultTime,$defaultSwitchOn")
+                apply()
+            }
+        }
 
         bt0.setOnClickListener {
             val num = et0.text.toString().toIntOrNull() ?: PluginEntry.DEFAULT_NUM
