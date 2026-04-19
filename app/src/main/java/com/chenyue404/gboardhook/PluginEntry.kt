@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
+import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.os.Bundle
 import android.os.CancellationSignal
@@ -34,6 +35,7 @@ class PluginEntry : IXposedHookLoadPackage {
         const val DEFAULT_NUM = 100
         const val DEFAULT_TIME = DAY * 7
         private const val CLIPBOARD_PROVIDER = "com.google.android.apps.inputmethod.libs.clipboard.ClipboardContentProvider"
+        private const val CLIPBOARD_TABLE_KEYWORD = "clipboard_content"
         private val LIMIT_REGEX = Regex("\\blimit\\s+\\d+\\b", RegexOption.IGNORE_CASE)
     }
 
@@ -149,6 +151,7 @@ class PluginEntry : IXposedHookLoadPackage {
 
         hookClipboardProviderLegacy(classLoader)
         hookClipboardProviderBundle(classLoader)
+        hookSQLiteClipboardQueries()
     }
 
     private fun hookClipboardProviderLegacy(classLoader: ClassLoader) {
@@ -234,6 +237,99 @@ class PluginEntry : IXposedHookLoadPackage {
                 }
             )
         }
+    }
+
+    private fun hookSQLiteClipboardQueries() {
+        tryHook("SQLiteDatabase#query-limit") {
+            findAndHookMethod(
+                SQLiteDatabase::class.java,
+                "query",
+                String::class.java,
+                Array<String>::class.java,
+                String::class.java,
+                Array<String>::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        rewriteSqliteQuery(param, 0, 2, 3, 7, "sqlite query")
+                    }
+                }
+            )
+        }
+
+        tryHook("SQLiteDatabase#query-limit-cancel") {
+            findAndHookMethod(
+                SQLiteDatabase::class.java,
+                "query",
+                String::class.java,
+                Array<String>::class.java,
+                String::class.java,
+                Array<String>::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                CancellationSignal::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        rewriteSqliteQuery(param, 0, 2, 3, 7, "sqlite query cancel")
+                    }
+                }
+            )
+        }
+
+        tryHook("SQLiteDatabase#query-distinct") {
+            findAndHookMethod(
+                SQLiteDatabase::class.java,
+                "query",
+                java.lang.Boolean.TYPE,
+                String::class.java,
+                Array<String>::class.java,
+                String::class.java,
+                Array<String>::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                object : XC_MethodHook() {
+                    override fun beforeHookedMethod(param: MethodHookParam) {
+                        rewriteSqliteQuery(param, 1, 3, 4, 8, "sqlite query distinct")
+                    }
+                }
+            )
+        }
+    }
+
+    private fun rewriteSqliteQuery(
+        param: XC_MethodHook.MethodHookParam,
+        tableIndex: Int,
+        selectionIndex: Int,
+        selectionArgsIndex: Int,
+        limitIndex: Int,
+        label: String
+    ) {
+        val table = param.args.getOrNull(tableIndex)?.toString()
+        if (!isClipboardTable(table)) {
+            return
+        }
+        val selection = param.args.getOrNull(selectionIndex)?.toString().orEmpty()
+        val selectionArgs = param.args.getOrNull(selectionArgsIndex) as? Array<String>
+        val limit = param.args.getOrNull(limitIndex)?.toString()
+        log("$label table=$table selection=$selection limit=$limit")
+
+        rewriteSelectionArgs(selection, selectionArgs)?.let {
+            param.args[selectionArgsIndex] = it
+        }
+
+        param.args[limitIndex] = clipboardTextSize.toString()
+        log("$label limit forced to ${clipboardTextSize}")
+    }
+
+    private fun isClipboardTable(table: String?): Boolean {
+        return table?.lowercase(Locale.ROOT)?.contains(CLIPBOARD_TABLE_KEYWORD) == true
     }
 
     private fun rewriteSelectionArgs(selection: String, selectionArgs: Array<String>?): Array<String>? {
